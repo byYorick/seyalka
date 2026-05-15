@@ -1,0 +1,64 @@
+menu "Sower TMC2209 drivers"
+
+    config SOWER_TMC2209_ENABLE
+        bool "Configure TMC2209 stepper drivers over UART"
+        default n
+        help
+            Включает инициализацию TMC2209 по UART2 (GPIO16/17 на MKS TinyBee).
+
+            На плате по умолчанию драйверы часто в standalone-режиме (DIP/потенциометр).
+            Для UART нужна разводка MS3/UART на общую линию UART2; см. docs и MKS issue #6.
+
+    config SOWER_TMC2209_UART_PORT
+        int "UART port number"
+        depends on SOWER_TMC2209_ENABLE
+        default 2
+        range 0 2
+
+    config SOWER_TMC2209_TX_GPIO
+        int "UART TX GPIO"
+        depends on SOWER_TMC2209_ENABLE
+        default 17
+
+    config SOWER_TMC2209_RX_GPIO
+        int "UART RX GPIO"
+        depends on SOWER_TMC2209_ENABLE
+        default 16
+
+    config SOWER_TMC2209_BAUD
+        int "UART baud rate"
+        depends on SOWER_TMC2209_ENABLE
+        default 115200
+
+    config SOWER_TMC2209_RSENSE_MILLIOHM
+        int "Sense resistor value, milliohm"
+        depends on SOWER_TMC2209_ENABLE
+        default 110
+        range 50 200
+        help
+            Типично 110 mOhm на модулях BIGTREETECH / MKS.
+
+    config SOWER_TMC2209_RUN_CURRENT_MA
+        int "Motor run current (RMS), mA"
+        depends on SOWER_TMC2209_ENABLE
+        default 1500
+        range 200 2000
+
+    config SOWER_TMC2209_MICROSTEPS
+        int "Microsteps"
+        depends on SOWER_TMC2209_ENABLE
+        default 16
+        help
+            Допустимые значения: 1, 2, 4, 8, 16, 32, 64, 128, 256.
+
+    config SOWER_TMC2209_STEALTHCHOP
+        bool "Enable StealthChop (quiet mode)"
+        depends on SOWER_TMC2209_ENABLE
+        default y
+
+    config SOWER_TMC2209_FAIL_ON_COMM_ERROR
+        bool "Enter safe state if driver UART check fails"
+        depends on SOWER_TMC2209_ENABLE
+        default y
+
+endmenu

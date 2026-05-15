@@ -8,6 +8,7 @@ idf_component_register(
         motion_adapter
         safety
         storage
+        tmc2209
         ui_display
         ui_web
 )

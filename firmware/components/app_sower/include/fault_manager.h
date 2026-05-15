@@ -15,6 +15,7 @@ typedef enum {
     FAULT_VACUUM_RELEASE_FAILED,
     FAULT_ADC_RANGE,
     FAULT_MOTION_TIMEOUT,
+    FAULT_TMC_COMM_FAILED,
 } fault_code_t;
 
 typedef enum {

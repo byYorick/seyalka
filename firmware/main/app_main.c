@@ -11,7 +11,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #endif
+#include "fault_manager.h"
 #include "safety.h"
+#include "tmc2209.h"
 #include "ui_display.h"
 #include "ui_web.h"
 
@@ -91,8 +93,30 @@ void app_main(void)
     }
 
     ESP_ERROR_CHECK(board_init());
-    ESP_ERROR_CHECK(io_service_start(NULL));
     ESP_ERROR_CHECK(safety_init());
+
+#if CONFIG_SOWER_TMC2209_ENABLE
+    {
+        tmc2209_config_t tmc_cfg = { 0 };
+        ESP_ERROR_CHECK(tmc2209_init());
+        ESP_ERROR_CHECK(tmc2209_get_default_config(&tmc_cfg));
+        esp_err_t tmc_err = tmc2209_configure_all(&tmc_cfg);
+        if (tmc_err == ESP_OK) {
+            tmc_err = tmc2209_verify_sower_axes();
+        }
+        if (tmc_err != ESP_OK) {
+            ESP_LOGE(TAG, "TMC2209 setup failed: %s", esp_err_to_name(tmc_err));
+            fault_manager_raise(FAULT_TMC_COMM_FAILED, FAULT_SEVERITY_CRITICAL);
+#if CONFIG_SOWER_TMC2209_FAIL_ON_COMM_ERROR
+            ESP_ERROR_CHECK(safety_enter_safe_state());
+#endif
+        } else {
+            ESP_LOGI(TAG, "TMC2209 axes X/Z/E0 configured and verified");
+        }
+    }
+#endif
+
+    ESP_ERROR_CHECK(io_service_start(NULL));
     ESP_ERROR_CHECK(event_log_init());
     ESP_ERROR_CHECK(ui_display_init());
     ESP_ERROR_CHECK(ui_web_init());

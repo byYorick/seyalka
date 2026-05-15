@@ -69,3 +69,20 @@ Axes v1:
 `motion_home_axis()` — homing Z (dibbler) and E0 (transfer) toward home switch (`BOARD_IN_*_HOME`, stable=1 = at home). Conveyor has no homing. Homing uses 25% of axis `max_speed_mm_s`, 2 mm chunks.
 
 `cassette_wait_and_capture()` feeds the belt in 5 mm chunks until `BOARD_IN_CASSETTE_SENSOR` is active or timeout.
+
+## TMC2209 (optional UART)
+
+**Component config → Sower TMC2209 drivers →** enable `SOWER_TMC2209_ENABLE`.
+
+| Setting | Default | Notes |
+|---------|---------|-------|
+| UART | UART2, TX=17, RX=16 | MKS TinyBee UART2 (conflicts with LCD D5/D7 if display used) |
+| Run current | 1500 mA RMS | Project target; verify driver temperature |
+| Microsteps | 16 | Must match DIP (MS1/MS2) when MS3 removed for UART |
+| StealthChop | on | Quiet mode; spreadCycle if disabled |
+
+**Hardware:** stock TinyBee often runs TMC2209 in standalone mode (potentiometer + DIP). UART needs MS3 jumper off and a shared UART bus to drivers (see MKS-TinyBee issue #6, `docs/SOWER_HARDWARE_BRINGUP.md`).
+
+Configured axes: **X** (conveyor, addr 0), **Z** (dibbler, addr 2), **E0** (transfer, addr 3). Y (addr 1) is unused in v1.
+
+On communication failure: `FAULT_TMC_COMM_FAILED`; with `SOWER_TMC2209_FAIL_ON_COMM_ERROR`, boot enters safe state.

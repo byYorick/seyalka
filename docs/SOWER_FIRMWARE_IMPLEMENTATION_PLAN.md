@@ -240,6 +240,22 @@ idf.py build
 
 ### Этап 4. TMC2209
 
+**Статус:** базово выполнено 2026-05-15.
+
+Сделано:
+
+- компонент `firmware/components/tmc2209` — UART, запись GCONF/IHOLD_IRUN/CHOPCONF/PWMCONF;
+- Kconfig `SOWER_TMC2209_*` (ток 1.5 A, microsteps, StealthChop, UART2 GPIO16/17);
+- конфигурация осей X/Z/E0 (адреса 0/2/3) в `app_main` после `safety_init`;
+- проверка связи по IFCNT + readback IHOLD_IRUN;
+- `FAULT_TMC_COMM_FAILED` при ошибке (опционально safe state).
+
+Осталось:
+
+- проверить UART на реальной плате (часто нужен hardware mod / MS3 off);
+- согласовать microsteps с DIP и `steps_per_mm` в recipe;
+- мониторинг DRV_STATUS/перегрева (M122-аналог).
+
 Цель: драйверы должны иметь контролируемую конфигурацию.
 
 Сделать:

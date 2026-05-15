@@ -68,6 +68,18 @@ idf.py build flash monitor
 | enable polarity | active low | OK / инвертировать |
 | direction | | forward = positive dir level |
 
+## TMC2209 UART (этап 4)
+
+| # | Проверка | Ожидание | Факт | Дата | Примечание |
+|---|----------|----------|------|------|------------|
+| T1 | DIP / MS3 | MS3 снят для UART-режима | | | иначе 5V на линии UART |
+| T2 | Адреса MS1/MS2 | X=0, Z=2, E0=3 | | | |
+| T3 | Boot log | `TMC2209 axes X/Z/E0 configured and verified` | | | `CONFIG_SOWER_TMC2209_ENABLE` |
+| T4 | IFCNT / readback | нет `FAULT_TMC_COMM_FAILED` | | | |
+| T5 | Ток 1.5 A | драйверы не перегреваются | | | после реальной нагрузки |
+
+**TinyBee caveat:** с завода UART на TMC часто не разведён; возможна доработка (R9/R10, общая линия UART2, резистор ~220 Ω на TX). Без UART оставить `SOWER_TMC2209_ENABLE` выключенным и настроить ток вручную (Vref/DIP).
+
 ## Известные проблемы
 
 _Пока пусто — добавлять по мере тестов._

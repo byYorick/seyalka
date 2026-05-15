@@ -436,6 +436,7 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # CONFIG_SOWER_OUTPUT_LED_TEST is not set
 # CONFIG_SOWER_IO_MONITOR is not set
+# CONFIG_SOWER_CONVEYOR_MOTION_TEST is not set
 # end of Sower bring-up options
 
 #
@@ -2031,6 +2032,12 @@ CONFIG_WIFI_PROV_AUTOSTOP_TIMEOUT=30
 CONFIG_WIFI_PROV_STA_ALL_CHANNEL_SCAN=y
 # CONFIG_WIFI_PROV_STA_FAST_SCAN is not set
 # end of Wi-Fi Provisioning Manager
+
+#
+# Sower TMC2209 drivers
+#
+# CONFIG_SOWER_TMC2209_ENABLE is not set
+# end of Sower TMC2209 drivers
 # end of Component config
 
 # CONFIG_IDF_EXPERIMENTAL_FEATURES is not set
