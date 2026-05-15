@@ -1,0 +1,12 @@
+#pragma once
+
+typedef enum {
+    SOWER_EVENT_TICK = 0,
+    SOWER_EVENT_START_STOP,
+    SOWER_EVENT_CASSETTE_DETECTED,
+    SOWER_EVENT_MOTION_DONE,
+    SOWER_EVENT_TIMEOUT,
+    SOWER_EVENT_FAULT,
+    SOWER_EVENT_ESTOP,
+} sower_event_t;
+

@@ -1,0 +1,57 @@
+menu "Sower bring-up options"
+
+    config SOWER_OUTPUT_LED_TEST
+        bool "Run TinyBee HE/FAN output LED test on boot"
+        default n
+        help
+            Включает циклический тест I2SO-выходов H-BED, H-E0, H-E1,
+            FAN1 и FAN2 сразу после старта прошивки.
+
+            Использовать только для bring-up платы без подключенных
+            нагревателей, клапанов, насосов и других силовых нагрузок.
+
+    config SOWER_IO_MONITOR
+        bool "Print TinyBee input and vacuum ADC monitor"
+        default n
+        help
+            Включает периодический вывод stable/raw состояний входов
+            и raw ADC вакуума в serial log.
+
+            Использовать для проверки полярности датчиков и первичного
+            bring-up входов. В production-режиме оставлять выключенным.
+
+    config SOWER_IO_MONITOR_PERIOD_MS
+        int "TinyBee input and ADC monitor period, ms"
+        depends on SOWER_IO_MONITOR
+        default 1000
+        range 100 10000
+        help
+            Период вывода service-монитора входов и ADC в миллисекундах.
+
+    config SOWER_CONVEYOR_MOTION_TEST
+        bool "Run TinyBee conveyor X stepper motion test on boot"
+        default n
+        help
+            Включает короткий тест X STEP/DIR/EN через I2SO: ось конвейера
+            двигается вперед и назад после старта прошивки.
+
+            Использовать только без опасной нагрузки или с подготовленной
+            механикой, где движение конвейера безопасно.
+
+    config SOWER_CONVEYOR_MOTION_TEST_DISTANCE_MM
+        int "Conveyor motion test distance, mm"
+        depends on SOWER_CONVEYOR_MOTION_TEST
+        default 10
+        range 1 200
+        help
+            Расстояние одного хода для теста конвейера в миллиметрах.
+
+    config SOWER_CONVEYOR_MOTION_TEST_SPEED_MM_S
+        int "Conveyor motion test speed, mm/s"
+        depends on SOWER_CONVEYOR_MOTION_TEST
+        default 5
+        range 1 50
+        help
+            Скорость теста конвейера в миллиметрах в секунду.
+
+endmenu
