@@ -3,7 +3,7 @@
 **Дата:** 2026-05-15  
 **Плата:** MakerBase MKS TinyBee V1.0  
 **Проект:** автономная сеялка автовысева семян в кассеты  
-**Текущий статус:** ESP-IDF skeleton собирается из корня, `grblhal_i2s_out` passthrough проверен на `HE/FAN` светодиодах, постоянный LED-test вынесен в отключаемый bring-up режим, `io_task` и базовый `safety_task` добавлены.
+**Текущий статус:** ESP-IDF skeleton собирается из корня; `grblhal_i2s_out` passthrough проверен на `HE/FAN`; bring-up режимы LED/IO/conveyor вынесены в Kconfig; `io_task` и `safety_task` работают; `motion_adapter` v1 (software step gen через I2SO, 3 оси, `motion_wait_idle`); FSM/machine/UI — черновики.
 
 Этот документ является рабочим заданием для ИИ-агента, который будет продолжать реализацию прошивки. Перед изменениями обязательно прочитать:
 
@@ -40,10 +40,11 @@ idf.py build
 - `firmware/components/grblhal_i2s_out` - I2S0 passthrough backend для 74HC595/I2SO.
 - `firmware/components/board_tinybee` - базовые входы, выходы, safe outputs.
 - `firmware/components/io_service` - регулярный `io_task` для debounce входов и обновления raw ADC вакуума.
-- `firmware/main/Kconfig.projbuild` - bring-up флаги `CONFIG_SOWER_OUTPUT_LED_TEST` и `CONFIG_SOWER_IO_MONITOR`.
-- `firmware/main/app_main.c` - LED-test для `H-BED`, `H-E0`, `H-E1`, `FAN1`, `FAN2`, включается только через `CONFIG_SOWER_OUTPUT_LED_TEST`.
+- `firmware/main/Kconfig.projbuild` - bring-up флаги `CONFIG_SOWER_OUTPUT_LED_TEST`, `CONFIG_SOWER_IO_MONITOR`, `CONFIG_SOWER_CONVEYOR_MOTION_TEST`.
+- `firmware/main/app_main.c` - опциональные bring-up задачи LED-test и conveyor motion test.
+- `firmware/components/motion_adapter` - software step generator через I2SO для X/Z/E0, `motion_wait_idle()`.
 - `firmware/components/safety` - fault latch, safe-state, ACK, periodic output conflict check, отключенный по умолчанию control watchdog.
-- Заготовки компонентов: `motion_adapter`, `machine`, `app_sower`, `safety`, `storage`, `ui_display`, `ui_web`.
+- Заготовки компонентов: `machine`, `app_sower`, `storage`, `ui_display`, `ui_web`.
 
 Проверенный на железе факт:
 
@@ -178,6 +179,30 @@ idf.py build
 - Safe state не зависит от UI/web.
 
 ### Этап 3. Motion adapter v1
+
+**Статус:** в работе 2026-05-15.
+
+Сделано:
+
+- step/dir/enable для X/Z/E0 через I2SO (`grblhal_i2s_out`);
+- `motion_init()`, `motion_enable_all()`, `motion_stop_all()`, `motion_move_rel_mm()`, `motion_move_abs_mm()`, `motion_is_busy()`, `motion_get_status()`;
+- `motion_wait_idle(timeout_ms)` с остановкой при timeout;
+- `motion_task` на отдельном ядре, software step generator для bring-up;
+- bring-up тест конвейера через `CONFIG_SOWER_CONVEYOR_MOTION_TEST` в `app_main.c`.
+
+Осталось:
+
+- проверить X/Z/E0 на железе (enable polarity, direction, STEP, home switches);
+- уточнить направление homing и active level концевиков в `SOWER_HARDWARE_BRINGUP.md`;
+- timeout/ограничение длины хода внутри motion path (сейчас — chunked + `motion_wait_idle`);
+- позже: grblHAL backend или TMC2209 (этап 4).
+
+Дополнительно сделано в этапе 3:
+
+- `motion_home_axis()` для Z/E0 (chunked search к home switch, backoff, сброс position);
+- `cassette_wait_and_capture()` — подача чанками до `BOARD_IN_CASSETTE_SENSOR`;
+- `cassette_move_to_first_row()` / `cassette_advance_row()` — ожидание завершения хода;
+- `dibbler` / `transfer_arm` — `motion_wait_idle` после перемещений.
 
 Цель: получить контролируемое движение одной оси, затем остальных.
 
@@ -506,12 +531,13 @@ idf.py build
 
 ## 8. Ближайшее задание для следующего агента
 
-Первый практический шаг:
+Практические шаги (этап 3 + bring-up):
 
-1. Добавить service/bring-up монитор входов и raw ADC вакуума через serial log или display-заглушку.
-2. Проверить полярность датчиков на железе.
-3. Зафиксировать результаты проверки в документации.
-4. Начать этап 2: safety fault latch и periodic safety check.
+1. Включить `CONFIG_SOWER_IO_MONITOR`, проверить полярность входов и raw ADC вакуума на железе; записать в `docs/SOWER_HARDWARE_BRINGUP.md`.
+2. Без нагрузки включить `CONFIG_SOWER_CONVEYOR_MOTION_TEST` (малая дистанция/скорость), проверить STEP/DIR/EN оси X; записать результат.
+3. Проверить `motion_home_axis()` на Z/E0 и `cassette_wait_and_capture()` на железе; записать полярность в bring-up doc.
+4. После стабильного motion — этап 4 (TMC2209 UART).
+5. Добавить `control_task` и non-blocking FSM tick (этап 7).
 
 Проверка:
 
@@ -519,11 +545,13 @@ idf.py build
 cd /home/georgiy/esp/solo/seyalka
 source ./export_idf.sh
 idf.py build
+idf.py menuconfig   # Component config → Sower bring-up options
+idf.py flash monitor
 ```
 
 Ожидаемый результат:
 
-- default boot не мигает `HE/FAN`;
+- default boot не мигает `HE/FAN` и не крутит конвейер;
 - `io_task` стартует после `board_init`;
-- входы и ADC доступны через `board_tinybee` snapshot;
+- при `CONFIG_SOWER_CONVEYOR_MOTION_TEST` ось X делает ход +/- N mm и возвращается;
 - прямых GPIO-вызовов из app/machine слоев нет.

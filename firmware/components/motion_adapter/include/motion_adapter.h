@@ -38,4 +38,5 @@ esp_err_t motion_home_axis(motion_axis_t axis, uint32_t timeout_ms);
 esp_err_t motion_move_rel_mm(motion_axis_t axis, float distance_mm, float speed_mm_s);
 esp_err_t motion_move_abs_mm(motion_axis_t axis, float position_mm, float speed_mm_s);
 bool motion_is_busy(void);
+esp_err_t motion_wait_idle(uint32_t timeout_ms);
 esp_err_t motion_get_status(motion_status_t *status);

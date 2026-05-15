@@ -6,7 +6,8 @@
 #include "esp_log.h"
 #include "event_log.h"
 #include "io_service.h"
-#if CONFIG_SOWER_OUTPUT_LED_TEST
+#include "motion_adapter.h"
+#if CONFIG_SOWER_OUTPUT_LED_TEST || CONFIG_SOWER_CONVEYOR_MOTION_TEST
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #endif
@@ -48,6 +49,35 @@ static void output_led_test_task(void *arg)
 }
 #endif
 
+#if CONFIG_SOWER_CONVEYOR_MOTION_TEST
+static void conveyor_motion_test_task(void *arg)
+{
+    (void)arg;
+
+    const float distance_mm = (float)CONFIG_SOWER_CONVEYOR_MOTION_TEST_DISTANCE_MM;
+    const float speed_mm_s = (float)CONFIG_SOWER_CONVEYOR_MOTION_TEST_SPEED_MM_S;
+    const uint32_t move_timeout_ms = 120000;
+
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+    while (true) {
+        ESP_LOGI(TAG, "conveyor motion test: forward %.1f mm @ %.1f mm/s", distance_mm, speed_mm_s);
+        ESP_ERROR_CHECK(motion_enable_all(true));
+        ESP_ERROR_CHECK(motion_move_rel_mm(MOTION_AXIS_CONVEYOR, distance_mm, speed_mm_s));
+        ESP_ERROR_CHECK(motion_wait_idle(move_timeout_ms));
+
+        vTaskDelay(pdMS_TO_TICKS(300));
+
+        ESP_LOGI(TAG, "conveyor motion test: reverse %.1f mm @ %.1f mm/s", distance_mm, speed_mm_s);
+        ESP_ERROR_CHECK(motion_move_rel_mm(MOTION_AXIS_CONVEYOR, -distance_mm, speed_mm_s));
+        ESP_ERROR_CHECK(motion_wait_idle(move_timeout_ms));
+        ESP_ERROR_CHECK(motion_enable_all(false));
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+#endif
+
 void app_main(void)
 {
     ESP_LOGI(TAG, "sower TinyBee firmware skeleton boot");
@@ -75,5 +105,12 @@ void app_main(void)
 #else
     ESP_LOGI(TAG, "output LED test is disabled; outputs remain under normal safety control");
 #endif
-    ESP_LOGI(TAG, "skeleton initialized; motion, display and web backends are still stubs");
+#if CONFIG_SOWER_CONVEYOR_MOTION_TEST
+    ESP_LOGW(TAG,
+             "conveyor motion test is enabled: X axis will move +/- %d mm at %d mm/s",
+             CONFIG_SOWER_CONVEYOR_MOTION_TEST_DISTANCE_MM,
+             CONFIG_SOWER_CONVEYOR_MOTION_TEST_SPEED_MM_S);
+    xTaskCreate(conveyor_motion_test_task, "conveyor_motion_test", 4096, NULL, 3, NULL);
+#endif
+    ESP_LOGI(TAG, "boot complete; display and web backends are still stubs");
 }

@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "board_pins.h"
+#include "board_tinybee.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "esp_rom_sys.h"
@@ -17,6 +18,9 @@ static const uint32_t MOTION_TASK_STACK_BYTES = 4096;
 static const UBaseType_t MOTION_TASK_PRIORITY = 8;
 static const uint32_t STEP_PULSE_WIDTH_US = 10;
 static const uint32_t MIN_STEP_INTERVAL_US = 50;
+static const float HOME_CHUNK_MM = 2.0f;
+static const float HOME_BACKOFF_MM = 5.0f;
+static const float HOME_SPEED_FACTOR = 0.25f;
 
 typedef struct {
     uint8_t en_bit;
@@ -367,16 +371,96 @@ esp_err_t motion_stop_all(void)
     return ESP_OK;
 }
 
+static board_input_t axis_home_input(motion_axis_t axis)
+{
+    switch (axis) {
+    case MOTION_AXIS_DIBBLER:
+        return BOARD_IN_DIBBLER_HOME;
+    case MOTION_AXIS_TRANSFER:
+        return BOARD_IN_TRANSFER_HOME;
+    default:
+        return BOARD_IN_COUNT;
+    }
+}
+
+static bool axis_at_home(motion_axis_t axis)
+{
+    const board_input_t input = axis_home_input(axis);
+    if (input >= BOARD_IN_COUNT) {
+        return false;
+    }
+    return board_get_input(input);
+}
+
+static void reset_axis_position_steps(motion_axis_t axis)
+{
+    portENTER_CRITICAL(&s_motion_lock);
+    s_position_steps[axis] = 0;
+    portEXIT_CRITICAL(&s_motion_lock);
+}
+
+static esp_err_t move_toward_home_until_switch(motion_axis_t axis, float homing_speed_mm_s, uint32_t timeout_ms)
+{
+    const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+
+    while (!axis_at_home(axis)) {
+        if (xTaskGetTickCount() >= deadline) {
+            (void)motion_stop_all();
+            ESP_LOGE(TAG, "home axis %d timeout", axis);
+            return ESP_ERR_TIMEOUT;
+        }
+
+        ESP_RETURN_ON_ERROR(motion_move_rel_mm(axis, -HOME_CHUNK_MM, homing_speed_mm_s),
+                            TAG,
+                            "home chunk failed");
+        ESP_RETURN_ON_ERROR(motion_wait_idle(timeout_ms), TAG, "home chunk wait failed");
+    }
+
+    return ESP_OK;
+}
+
 esp_err_t motion_home_axis(motion_axis_t axis, uint32_t timeout_ms)
 {
-    (void)timeout_ms;
-
     if (!axis_valid(axis)) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_LOGW(TAG, "home axis %d is not implemented yet", axis);
-    return ESP_ERR_NOT_SUPPORTED;
+    if (axis == MOTION_AXIS_CONVEYOR) {
+        ESP_LOGW(TAG, "conveyor has no home switch");
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+
+    if (axis_home_input(axis) >= BOARD_IN_COUNT) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_RETURN_ON_FALSE(s_initialized, ESP_ERR_INVALID_STATE, TAG, "motion is not initialized");
+    ESP_RETURN_ON_FALSE(timeout_ms > 0, ESP_ERR_INVALID_ARG, TAG, "home timeout is zero");
+
+    const motion_axis_cfg_t *config = axis_cfg(axis);
+    ESP_RETURN_ON_FALSE(config, ESP_ERR_INVALID_ARG, TAG, "axis config not found");
+
+    const float homing_speed_mm_s = fmaxf(config->max_speed_mm_s * HOME_SPEED_FACTOR, 1.0f);
+
+    ESP_LOGI(TAG, "home axis %d start, timeout=%lu ms", axis, (unsigned long)timeout_ms);
+    ESP_RETURN_ON_ERROR(motion_enable_all(true), TAG, "home enable failed");
+
+    if (axis_at_home(axis)) {
+        ESP_LOGI(TAG, "axis %d already at home, backing off %.1f mm", axis, HOME_BACKOFF_MM);
+        ESP_RETURN_ON_ERROR(motion_move_rel_mm(axis, HOME_BACKOFF_MM, homing_speed_mm_s),
+                            TAG,
+                            "home backoff failed");
+        ESP_RETURN_ON_ERROR(motion_wait_idle(timeout_ms), TAG, "home backoff wait failed");
+    }
+
+    ESP_RETURN_ON_ERROR(move_toward_home_until_switch(axis, homing_speed_mm_s, timeout_ms),
+                        TAG,
+                        "home search failed");
+
+    (void)motion_stop_all();
+    reset_axis_position_steps(axis);
+    ESP_LOGI(TAG, "home axis %d complete", axis);
+    return ESP_OK;
 }
 
 esp_err_t motion_move_rel_mm(motion_axis_t axis, float distance_mm, float speed_mm_s)
@@ -404,6 +488,25 @@ bool motion_is_busy(void)
     const bool busy = s_busy;
     portEXIT_CRITICAL(&s_motion_lock);
     return busy;
+}
+
+esp_err_t motion_wait_idle(uint32_t timeout_ms)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+    while (motion_is_busy()) {
+        if (xTaskGetTickCount() >= deadline) {
+            (void)motion_stop_all();
+            ESP_LOGE(TAG, "motion wait idle timeout after %lu ms", (unsigned long)timeout_ms);
+            return ESP_ERR_TIMEOUT;
+        }
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+
+    return ESP_OK;
 }
 
 esp_err_t motion_get_status(motion_status_t *status)

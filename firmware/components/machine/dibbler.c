@@ -22,9 +22,17 @@ esp_err_t dibbler_home(void)
 
 esp_err_t dibbler_make_holes(void)
 {
-    ESP_RETURN_ON_ERROR(motion_move_abs_mm(MOTION_AXIS_DIBBLER, s_cfg.work_position_mm, s_cfg.move_speed_mm_s), "dibbler", "work move failed");
+    ESP_RETURN_ON_ERROR(motion_move_abs_mm(MOTION_AXIS_DIBBLER, s_cfg.work_position_mm, s_cfg.move_speed_mm_s),
+                        "dibbler",
+                        "work move failed");
+    ESP_RETURN_ON_ERROR(motion_wait_idle(s_cfg.home_timeout_ms), "dibbler", "work move wait failed");
+
     if (s_cfg.dwell_ms > 0) {
         esp_rom_delay_us(s_cfg.dwell_ms * 1000U);
     }
-    return motion_move_abs_mm(MOTION_AXIS_DIBBLER, s_cfg.safe_position_mm, s_cfg.move_speed_mm_s);
+
+    ESP_RETURN_ON_ERROR(motion_move_abs_mm(MOTION_AXIS_DIBBLER, s_cfg.safe_position_mm, s_cfg.move_speed_mm_s),
+                        "dibbler",
+                        "safe move failed");
+    return motion_wait_idle(s_cfg.home_timeout_ms);
 }
